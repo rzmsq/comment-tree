@@ -1,0 +1,10 @@
+app_config:
+  env: "DEVELOPMENT"
+  addr: "localhost:8080"
+server_config:
+  addr: "localhost:8081"
+  max_read_timeout: 10s
+  max_write_timeout: 5s
+db_config:
+  max_open_conns: 10
+  max_idle_conns: 10
