@@ -1,3 +1,14 @@
+.PHONY: quality lint vet
+
+quality: lint vet
+
+lint:
+	@echo "Running linter..."
+	golangci-lint run ./...
+
+vet:
+	@echo "Running vet..."
+	go vet ./...
 
 run:
 	docker-compose down -v

@@ -8,15 +8,33 @@
         body { font-family: sans-serif; margin: 2em; }
         #comments-list { list-style-type: none; padding: 0; }
         .comment-item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
-        .comment-item button { float: right; }
+        .comment-item button { margin-left: 5px; float: right; }
         form { margin-bottom: 2em; }
+        .comment-content { margin-right: 140px; }
+        .reply-form {
+            margin-top: 10px;
+            margin-left: 40px;
+        }
+        .nested-comments {
+            list-style-type: none;
+            padding-left: 20px;
+            margin-left: 20px;
+            border-left: 2px solid #eee;
+            margin-top: 10px;
+        }
+        #search-container { margin-bottom: 1em; }
     </style>
 </head>
 <body>
 
 <h1>Comments</h1>
 
+<div id="search-container">
+    <input type="search" id="search-input" placeholder="Search comments..." size="50">
+</div>
+
 <form id="new-comment-form">
+    <input type="text" id="username-text" placeholder="Your name" required>
     <input type="text" id="comment-text" placeholder="Write a comment..." required size="50">
     <button type="submit">Add Comment</button>
 </form>
@@ -26,55 +44,171 @@
 <script>
     const commentsList = document.getElementById('comments-list');
     const newCommentForm = document.getElementById('new-comment-form');
+    const usernameInput = document.getElementById('username-text');
     const commentTextInput = document.getElementById('comment-text');
+    const searchInput = document.getElementById('search-input');
+
+    let allComments = []; // Store all comments from the server
+
+    // Build a tree from a flat list of comments
+    function buildCommentTree(comments) {
+        const commentMap = {};
+        const tree = [];
+
+        comments.forEach(comment => {
+            comment.children = [];
+            commentMap[comment.id] = comment;
+        });
+
+        comments.forEach(comment => {
+            if (comment.parent_id !== null && commentMap[comment.parent_id]) {
+                commentMap[comment.parent_id].children.push(comment);
+            } else {
+                tree.push(comment);
+            }
+        });
+
+        return tree;
+    }
+
+    // Render a tree of comments recursively
+    function renderComments(comments, parentElement) {
+        comments.forEach(comment => {
+            const li = document.createElement('li');
+            li.className = 'comment-item';
+            li.dataset.id = comment.id;
+
+            const content = document.createElement('div');
+            content.className = 'comment-content';
+            content.innerHTML = `<strong>${comment.username || 'Anonymous'}:</strong> ${comment.text}`;
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.onclick = () => deleteComment(comment.id);
+
+            const replyBtn = document.createElement('button');
+            replyBtn.textContent = 'Reply';
+            replyBtn.onclick = () => showReplyForm(comment.id, li);
+
+            li.appendChild(replyBtn);
+            li.appendChild(deleteBtn);
+            li.appendChild(content);
+            parentElement.appendChild(li);
+
+            if (comment.children && comment.children.length > 0) {
+                const nestedList = document.createElement('ul');
+                nestedList.className = 'nested-comments';
+                li.appendChild(nestedList);
+                renderComments(comment.children, nestedList);
+            }
+        });
+    }
+
+    // Filter comments based on search term and re-render
+    function filterAndRenderComments() {
+        const searchTerm = searchInput.value.toLowerCase();
+
+        if (!searchTerm) {
+            const commentTree = buildCommentTree(allComments);
+            commentsList.innerHTML = '';
+            renderComments(commentTree, commentsList);
+            return;
+        }
+
+        const commentMap = {};
+        allComments.forEach(comment => {
+            commentMap[comment.id] = comment;
+        });
+
+        const matchingIds = new Set();
+        allComments.forEach(comment => {
+            if (comment.text.toLowerCase().includes(searchTerm) || comment.username.toLowerCase().includes(searchTerm)) {
+                // Add the comment and all its parents to the set
+                let current = comment;
+                while (current) {
+                    matchingIds.add(current.id);
+                    current = current.parent_id ? commentMap[current.parent_id] : null;
+                }
+            }
+        });
+
+        const filteredComments = allComments.filter(comment => matchingIds.has(comment.id));
+        const filteredTree = buildCommentTree(filteredComments);
+
+        commentsList.innerHTML = '';
+        renderComments(filteredTree, commentsList);
+    }
+
+    searchInput.addEventListener('input', filterAndRenderComments);
+
 
     // Fetch and display all comments
     async function fetchComments() {
         try {
-            const response = await fetch('/comments'); // Assumes GET /comments endpoint
+            const response = await fetch('/comments');
             if (!response.ok) throw new Error('Failed to fetch comments');
-            const comments = await response.json();
-
-            commentsList.innerHTML = ''; // Clear current list
-            comments.forEach(comment => {
-                const li = document.createElement('li');
-                li.className = 'comment-item';
-                li.textContent = comment.text; // Assumes comment object has a 'text' field
-                li.dataset.id = comment.id; // Assumes comment object has an 'id' field
-
-                const deleteBtn = document.createElement('button');
-                deleteBtn.textContent = 'Delete';
-                deleteBtn.onclick = () => deleteComment(comment.id);
-
-                li.appendChild(deleteBtn);
-                commentsList.appendChild(li);
-            });
+            allComments = await response.json() || [];
+            filterAndRenderComments(); // Use filter function to render initially
         } catch (error) {
             console.error('Error fetching comments:', error);
             commentsList.innerHTML = '<li>Error loading comments.</li>';
         }
     }
 
-    // Create a new comment
-    newCommentForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const text = commentTextInput.value;
-        if (!text) return;
+    // Show a reply form under a comment
+    function showReplyForm(parentId, parentElement) {
+        const existingForm = parentElement.querySelector('.reply-form');
+        if (existingForm) {
+            existingForm.remove();
+            return;
+        }
 
+        const form = document.createElement('form');
+        form.className = 'reply-form';
+        form.innerHTML = `
+            <input type="text" class="reply-username" placeholder="Your name" required>
+            <input type="text" class="reply-text" placeholder="Write a reply..." required size="40">
+            <button type="submit">Post Reply</button>
+        `;
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = form.querySelector('.reply-username').value;
+            const text = form.querySelector('.reply-text').value;
+            if (!text || !username) return;
+
+            await createComment(username, text, parentId);
+        });
+
+        parentElement.appendChild(form);
+    }
+
+    // Generic function to create a comment or a reply
+    async function createComment(username, text, parentId = null) {
         try {
-            const response = await fetch('/comments', { // Assumes POST /comments endpoint
+            const response = await fetch('/comments', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: text }) // Assumes the API expects an object with a 'text' field
+                body: JSON.stringify({ username, text, parent_id: parentId })
             });
 
             if (!response.ok) throw new Error('Failed to create comment');
-
-            commentTextInput.value = '';
             await fetchComments(); // Refresh the list
         } catch (error) {
             console.error('Error creating comment:', error);
         }
+    }
+
+    // Handle top-level comment form submission
+    newCommentForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = usernameInput.value;
+        const text = commentTextInput.value;
+        if (!text || !username) return;
+
+        await createComment(username, text);
+        usernameInput.value = '';
+        commentTextInput.value = '';
     });
 
     // Delete a comment
@@ -82,7 +216,7 @@
         if (!confirm('Are you sure you want to delete this comment?')) return;
 
         try {
-            const response = await fetch(`/comments/${id}`, { method: 'DELETE' }); // Assumes DELETE /comments/{id} endpoint
+            const response = await fetch(`/comments/${id}`, { method: 'DELETE' });
             if (!response.ok) throw new Error('Failed to delete comment');
             await fetchComments(); // Refresh the list
         } catch (error) {
