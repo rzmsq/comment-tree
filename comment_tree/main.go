@@ -1,12 +1,13 @@
 package main
 
 import (
-	"CommentTree/commentTree/adapters/db"
-	"CommentTree/commentTree/adapters/rest"
-	"CommentTree/commentTree/config"
-	"CommentTree/commentTree/pkg/handler"
-	httpserver "CommentTree/commentTree/pkg/http_server"
-	"CommentTree/commentTree/pkg/logger"
+	"CommentTree/comment_tree/adapters/db"
+	"CommentTree/comment_tree/adapters/rest"
+	"CommentTree/comment_tree/config"
+	"CommentTree/comment_tree/pkg/handler"
+	httpserver "CommentTree/comment_tree/pkg/http_server"
+	"CommentTree/comment_tree/pkg/logger"
+	"CommentTree/comment_tree/usecase"
 	"context"
 	"errors"
 	"flag"
@@ -15,6 +16,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/go-playground/validator/v10"
 )
 
 func main() {
@@ -40,16 +43,22 @@ func run(cfg *config.Config, log logger.Interface) error {
 	if err != nil {
 		return err
 	}
-	log.Debug("DB init success", "db", connDB)
+	log.Debug("DB init success", "db", *connDB)
+
+	validate := validator.New()
+
+	uc := usecase.NewUseCase(connDB, log, validate)
 
 	h := handler.New()
-	h.AddHandler("POST /comments", rest.NewCreateHandler(log))
-	h.AddHandler("GET /comments", rest.NewGetHandler(log))
-	h.AddHandler("DELETE /comments/{id}", rest.NewDeleteHandler(log))
-	log.Debug("Handler init success", "handler", h)
+	h.AddHandler("/", http.FileServer(http.Dir("./web")))
+
+	h.AddHandlerFunc("POST /comments", rest.NewCreateHandler(uc))
+	h.AddHandlerFunc("GET /comments", rest.NewGetHandler(uc))
+	h.AddHandlerFunc("DELETE /comments/{id}", rest.NewDeleteHandler(uc))
+	log.Debug("Handler init success", "handler", *h)
 
 	server := httpserver.New(h, cfg.ServerConfig)
-	log.Debug("Server init success", "server", server)
+	log.Debug("Server init success", "server", *server)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

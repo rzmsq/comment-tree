@@ -1,7 +1,7 @@
 package config
 
 import (
-	"CommentTree/commentTree/pkg/http_server/config"
+	"CommentTree/comment_tree/pkg/http_server/config"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )

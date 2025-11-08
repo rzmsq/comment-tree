@@ -1,8 +1,8 @@
 package httpserver
 
 import (
-	"CommentTree/commentTree/pkg/handler"
-	"CommentTree/commentTree/pkg/http_server/config"
+	"CommentTree/comment_tree/pkg/handler"
+	"CommentTree/comment_tree/pkg/http_server/config"
 	"context"
 	"net/http"
 )

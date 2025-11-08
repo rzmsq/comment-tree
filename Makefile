@@ -1,3 +1,9 @@
+
+run:
+	docker-compose down -v
+	docker-compose build --no-cache
+	docker-compose up
+
 tools:
 	go get github.com/ilyakaznacheev/cleanenv
 	go get github.com/go-playground/validator

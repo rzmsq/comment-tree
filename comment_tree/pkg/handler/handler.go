@@ -18,6 +18,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.h.ServeHTTP(w, r)
 }
 
-func (h *Handler) AddHandler(pattern string, handler func(w http.ResponseWriter, r *http.Request)) {
+func (h *Handler) AddHandlerFunc(pattern string, handler func(w http.ResponseWriter, r *http.Request)) {
 	h.h.HandleFunc(pattern, handler)
+}
+
+func (h *Handler) AddHandler(pattern string, handler http.Handler) {
+	h.h.Handle(pattern, handler)
 }
