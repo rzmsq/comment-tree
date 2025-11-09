@@ -21,8 +21,8 @@
     *   **Тело запроса (JSON):**
         ```json
         {
-          "parent_id": "optional-parent-uuid",
-          "author": "John Doe",
+          "parent_id": "1",
+          "username": "John Doe",
           "text": "This is a comment."
         }
         ```
